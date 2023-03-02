@@ -2,7 +2,7 @@
 name = "gossip"
 version = "0.4.90-unstable"
 description = "A social media client for nostr"
-authors = ["Mike Dilger <mike@mikedilger.com>"]
+authors = ["Mike Dilger <mike@mikedilger.com>", "fiatjaf <fiatjaf@gmail.com>", "Nate Levin <natelevincycling@gmail.com>", "Nethanja Focking <nethanja@nethanja.de>", "Daniele Tonon <tonon@vitamino.it>", "jeremyd (@jeremyd)"]
 license = "MIT"
 repository = "https://github.com/mikedilger/gossip"
 homepage = "https://github.com/mikedilger/gossip"
@@ -18,6 +18,7 @@ base64 = "0.21"
 dashmap = "5.4"
 dirs = "4.0"
 eframe = { git = "https://github.com/mikedilger/egui", branch="gossip", features = [ "dark-light", "persistence" ] }
+egui-winit = { git = "https://github.com/mikedilger/egui", branch="gossip", features = [ "default" ] }
 egui_extras = { git = "https://github.com/mikedilger/egui", branch="gossip", features = [ "image", "svg", "tracing" ] }
 encoding_rs = "0.8"
 futures = "0.3"

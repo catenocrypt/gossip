@@ -72,11 +72,12 @@ pub(super) fn update(app: &mut GossipUi, ctx: &Context, frame: &mut eframe::Fram
             }
         }
     });
-    ui.separator();
+
+    ui.add_space(10.0);
 
     post::posting_area(app, ctx, frame, ui);
 
-    ui.separator();
+    ui.add_space(10.0);
 
     match feed_kind {
         FeedKind::General => {
@@ -124,27 +125,24 @@ fn render_a_feed(
             y: app.current_scroll_offset * 2.0, // double speed
         })
         .show(ui, |ui| {
-            let bgcolor = if ctx.style().visuals.dark_mode {
-                Color32::BLACK
-            } else {
-                Color32::WHITE
-            };
-            Frame::none().fill(bgcolor).show(ui, |ui| {
-                for id in feed.iter() {
-                    render_post_maybe_fake(
-                        app,
-                        ctx,
-                        frame,
-                        ui,
-                        FeedPostParams {
-                            id: *id,
-                            indent: 0,
-                            as_reply_to: false,
-                            threaded,
-                        },
-                    );
-                }
-            });
+            Frame::none()
+                .fill(app.settings.theme.feed_scroll_fill(app.settings.dark_mode))
+                .show(ui, |ui| {
+                    for id in feed.iter() {
+                        render_post_maybe_fake(
+                            app,
+                            ctx,
+                            frame,
+                            ui,
+                            FeedPostParams {
+                                id: *id,
+                                indent: 0,
+                                as_reply_to: false,
+                                threaded,
+                            },
+                        );
+                    }
+                });
         });
 }
 
@@ -273,19 +271,7 @@ fn render_post_actual(
         None => DbPerson::new(event.pubkey.into()),
     };
 
-    let bgcolor = if app.viewed.contains(&event.id) {
-        if ctx.style().visuals.dark_mode {
-            Color32::BLACK
-        } else {
-            Color32::WHITE
-        }
-    } else {
-        if ctx.style().visuals.dark_mode {
-            Color32::from_rgb(60, 0, 0)
-        } else {
-            Color32::LIGHT_YELLOW
-        }
-    };
+    let is_new = !app.viewed.contains(&event.id);
 
     let is_main_event: bool = {
         let feed_kind = GLOBALS.feed.get_feed_kind();
@@ -295,34 +281,41 @@ fn render_post_actual(
         }
     };
 
-    let inner_response = Frame::none().fill(bgcolor).show(ui, |ui| {
-        if is_main_event {
-            thin_red_separator(ui);
-        }
+    let inner_response = Frame::none()
+        .inner_margin(app.settings.theme.feed_frame_inner_margin())
+        .outer_margin(app.settings.theme.feed_frame_outer_margin())
+        .rounding(app.settings.theme.feed_frame_rounding())
+        .shadow(app.settings.theme.feed_frame_shadow(app.settings.dark_mode))
+        .fill(
+            app.settings
+                .theme
+                .feed_frame_fill(is_new, is_main_event, app.settings.dark_mode),
+        )
+        .stroke(
+            app.settings
+                .theme
+                .feed_frame_stroke(is_new, is_main_event, app.settings.dark_mode),
+        )
+        .show(ui, |ui| {
+            ui.add_space(4.0);
 
-        ui.add_space(4.0);
-
-        ui.horizontal_wrapped(|ui| {
-            // Indents first (if threaded)
-            if threaded {
-                let space = 100.0 * (10.0 - (1000.0 / (indent as f32 + 100.0)));
-                ui.add_space(space);
-                if indent > 0 {
-                    ui.label(RichText::new(format!("{}>", indent)).italics().weak());
+            ui.horizontal_wrapped(|ui| {
+                // Indents first (if threaded)
+                if threaded {
+                    let space = 100.0 * (10.0 - (1000.0 / (indent as f32 + 100.0)));
+                    ui.add_space(space);
+                    if indent > 0 {
+                        ui.label(RichText::new(format!("{}>", indent)).italics().weak());
+                    }
                 }
-            }
 
-            if person.muted > 0 {
-                ui.label(RichText::new("MUTED POST").monospace().italics());
-            } else {
-                render_post_inner(app, ctx, ui, event, person, is_main_event, as_reply_to);
-            }
+                if person.muted > 0 {
+                    ui.label(RichText::new("MUTED POST").monospace().italics());
+                } else {
+                    render_post_inner(app, ctx, ui, event, person, is_main_event, as_reply_to);
+                }
+            });
         });
-
-        if is_main_event {
-            thin_red_separator(ui);
-        }
-    });
 
     // Mark post as viewed if hovered AND we are not scrolling
     if inner_response.response.hovered() && app.current_scroll_offset == 0.0 {
@@ -333,7 +326,12 @@ fn render_post_actual(
     let bottom = ui.next_widget_position();
     app.height.insert(id, bottom.y - top.y);
 
-    ui.separator();
+    thin_separator(
+        ui,
+        app.settings
+            .theme
+            .feed_post_separator_stroke(app.settings.dark_mode),
+    );
 
     if threaded && !as_reply_to {
         let replies = Globals::get_replies_sync(id);
@@ -515,7 +513,7 @@ fn render_post_inner(
                         None => DbPerson::new(inner_event.pubkey.into()),
                     };
                     ui.vertical(|ui| {
-                        thin_blue_separator(ui);
+                        thin_repost_separator(ui);
                         ui.add_space(4.0);
                         ui.horizontal_wrapped(|ui| {
                             render_post_inner(
@@ -528,7 +526,7 @@ fn render_post_inner(
                                 false,
                             );
                         });
-                        thin_blue_separator(ui);
+                        thin_repost_separator(ui);
                     });
                 } else if event.content.is_empty() {
                     content::render_content(
@@ -637,10 +635,13 @@ fn render_post_inner(
                 if app.settings.reactions {
                     let default_reaction_icon = match self_already_reacted {
                         true => "♥",
-                        false => "♡"
+                        false => "♡",
                     };
                     if ui
-                        .add(Label::new(RichText::new(default_reaction_icon).size(20.0)).sense(Sense::click()))
+                        .add(
+                            Label::new(RichText::new(default_reaction_icon).size(20.0))
+                                .sense(Sense::click()),
+                        )
                         .clicked()
                     {
                         let _ = GLOBALS
@@ -664,17 +665,18 @@ fn render_post_inner(
     });
 }
 
-fn thin_red_separator(ui: &mut Ui) {
-    thin_separator(ui, Color32::from_rgb(160, 0, 0));
+fn thin_repost_separator(ui: &mut Ui) {
+    let color = if ui.visuals().dark_mode {
+        Color32::from_gray(80)
+    } else {
+        Color32::from_gray(200)
+    };
+    thin_separator(ui, Stroke { width: 1.0, color });
 }
 
-fn thin_blue_separator(ui: &mut Ui) {
-    thin_separator(ui, Color32::from_rgb(0, 0, 160));
-}
-
-fn thin_separator(ui: &mut Ui, color: Color32) {
+fn thin_separator(ui: &mut Ui, stroke: Stroke) {
     let mut style = ui.style_mut();
-    style.visuals.widgets.noninteractive.bg_stroke = Stroke { width: 1.0, color };
+    style.visuals.widgets.noninteractive.bg_stroke = stroke;
     ui.add(Separator::default().spacing(0.0));
     ui.reset_style();
 }

@@ -3,7 +3,7 @@ mod help;
 mod people;
 mod relays;
 mod settings;
-pub(crate) mod style;
+mod theme;
 mod widgets;
 mod you;
 
@@ -14,8 +14,9 @@ use crate::feed::FeedKind;
 use crate::globals::GLOBALS;
 use crate::people::DbPerson;
 use crate::settings::Settings;
+pub use crate::ui::theme::Theme;
 use crate::ui::widgets::CopyButton;
-use eframe::{egui, IconData, Theme};
+use eframe::{egui, IconData};
 use egui::{
     Color32, ColorImage, Context, Image, ImageData, Label, RichText, SelectableLabel, Sense,
     TextStyle, TextureHandle, TextureOptions, Ui, Vec2,
@@ -34,7 +35,7 @@ pub fn run() -> Result<(), Error> {
     let options = eframe::NativeOptions {
         decorated: true,
         drag_and_drop_support: true,
-        default_theme: Theme::Light,
+        default_theme: eframe::Theme::Light,
         icon_data: Some(IconData {
             rgba: icon.into_raw(),
             width: icon_width,
@@ -74,6 +75,12 @@ enum Page {
     HelpHelp,
     HelpStats,
     HelpAbout,
+}
+
+pub enum HighlightType {
+    Nothing,
+    PublicKey,
+    Event,
 }
 
 struct GossipUi {
@@ -182,18 +189,6 @@ impl GossipUi {
             });
         }
 
-        if !settings.light_mode {
-            cctx.egui_ctx.set_visuals(style::dark_mode_visuals());
-        } else {
-            cctx.egui_ctx.set_visuals(style::light_mode_visuals());
-        };
-
-        cctx.egui_ctx.set_fonts(style::font_definitions());
-
-        let mut style: egui::Style = (*cctx.egui_ctx.style()).clone();
-        style.text_styles = style::text_styles();
-        cctx.egui_ctx.set_style(style);
-
         let icon_texture_handle = {
             let bytes = include_bytes!("../../gossip.png");
             let image = image::load_from_memory(bytes).unwrap();
@@ -231,6 +226,9 @@ impl GossipUi {
         } else {
             Page::Feed(FeedKind::General)
         };
+
+        // Apply current theme
+        theme::apply_theme(settings.theme, settings.dark_mode, &cctx.egui_ctx);
 
         GossipUi {
             next_frame: Instant::now(),
@@ -371,6 +369,7 @@ impl eframe::App for GossipUi {
         }
 
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
+            ui.add_space(6.0);
             ui.horizontal(|ui| {
                 let back_label_text = RichText::new("‹ Back");
                 let label = if self.history.is_empty() {
@@ -450,6 +449,7 @@ impl eframe::App for GossipUi {
                 }
                 ui.separator();
             });
+            ui.add_space(4.0);
         });
 
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
